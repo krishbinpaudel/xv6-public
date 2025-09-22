@@ -6,6 +6,81 @@
 #define HIDDEN 1
 #define SORT 2
 
+struct list_content {
+    char name[DIRSIZ];
+    struct stat st;
+    struct list_content *next;
+    struct list_content *prev;
+};
+
+void store_in_list(struct list_content **head, struct list_content **tail, char *name, struct stat st, int sort) {
+    struct list_content *data = malloc(sizeof(struct list_content));
+    if (!data) {
+        printf(2, "ls: cannot allocate memory\n");
+        return;
+    }
+    strcpy(data->name, name);
+    data->st = st;
+    if (*head == 0) {
+        data->next = 0;
+        data->prev = 0;
+        *head = data;
+        *tail = data;
+        return;
+    }
+    if (!sort) {
+        // insert at the end
+        (*tail)->next = data;
+        data->prev = *tail;
+        data->next = 0;
+        *tail = data;
+        return;
+    }
+    // sort by size (descending)
+    struct list_content *current = *head;
+    while (current) {
+        if (data->st.size > current->st.size) {
+            // insert before current
+            data->next = current;
+            data->prev = current->prev;
+            if (current->prev) {
+                current->prev->next = data;
+            } else {
+                *head = data;
+            }
+            current->prev = data;
+            return;
+        }
+        if (current->next == 0) {
+            // insert at the end
+            current->next = data;
+            data->prev = current;
+            data->next = 0;
+            *tail = data;
+            return;
+        }
+        current = current->next;
+    }
+}
+
+void deallocate_list(struct list_content *head) {
+    struct list_content *current = head;
+    struct list_content *next;
+    while (current) {
+        next = current->next;
+        free(current);
+        current = next;
+    }
+}
+
+void print_list(struct list_content *head) {
+    struct list_content *current = head;
+    while (current) {
+        printf(1, "%s %d %d %d\n", current->name, current->st.type, current->st.ino, current->st.size);
+        current = current->next;
+    }
+}
+
 char*
 fmtname(char *path)
 {
@@ -30,6 +105,8 @@ void
 ls(char *path, uint show_hidden, uint sort)
 {
   char buf[512], *p;
+  struct list_content *head = 0;
+  struct list_content *tail = 0;
   int fd;
   struct dirent de;
   struct stat st;
@@ -51,7 +128,8 @@ ls(char *path, uint show_hidden, uint sort)
     fmted = fmtname(path);
     if(!show_hidden && fmted[0] == '.')
       break;
-    printf(1, "%s %d %d %d\n", fmted, st.type, st.ino, st.size);
+    store_in_list(&head, &tail, fmted, st, sort);
+    //printf(1, "%s %d %d %d\n", fmted, st.type, st.ino, st.size);
     break;
 
   case T_DIR:
@@ -85,10 +163,13 @@ ls(char *path, uint show_hidden, uint sort)
               }
           }
         }
-      printf(1, "%s %d %d %d\n", fmted, st.type, st.ino, st.size);
+      store_in_list(&head, &tail, fmted, st, sort);
+      //printf(1, "%s %d %d %d\n", fmted, st.type, st.ino, st.size);
     }
     break;
   }
+  print_list(head);
+  deallocate_list(head);
   close(fd);
 }
 
@@ -123,7 +204,6 @@ main(int argc, char *argv[])
     for (; buf != 0; buf >>= 1){if (buf & 1) option_count++;};
     int folder_count = argc - option_count - 1;
     int offset = option_count + 1;
-    printf(1, "Number of folders: %d\n", folder_count);
     if (folder_count > 0){
       for(i=offset; i<argc; i++)
         ls(argv[i], (options & HIDDEN) ? 1 : 0, (options & SORT) ? 1 : 0);  
