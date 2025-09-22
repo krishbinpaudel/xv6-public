@@ -44,12 +44,14 @@ ls(char *path, uint show_hidden, uint sort)
     close(fd);
     return;
   }
+  char *fmted;
   switch(st.type){
   case T_FILE:
     // hide files starting with '.' unless show_hidden is set
-    if(!show_hidden && fmtname(path)[0] == '.')
+    fmted = fmtname(path);
+    if(!show_hidden && fmted[0] == '.')
       break;
-    printf(1, "%s %d %d %d\n", fmtname(path), st.type, st.ino, st.size);
+    printf(1, "%s %d %d %d\n", fmted, st.type, st.ino, st.size);
     break;
 
   case T_DIR:
@@ -72,7 +74,18 @@ ls(char *path, uint show_hidden, uint sort)
         printf(1, "ls: cannot stat %s\n", buf);
         continue;
       }
-      printf(1, "%s %d %d %d\n", fmtname(buf), st.type, st.ino, st.size);
+      // print '/' after directory names
+      fmted = fmtname(buf);
+      if (st.type == T_DIR){
+          int j = 0;
+          for (; j < DIRSIZ; j++) {
+              if (fmted[j] == ' ') {
+                  fmted[j] = '/';
+                  break;
+              }
+          }
+        }
+      printf(1, "%s %d %d %d\n", fmted, st.type, st.ino, st.size);
     }
     break;
   }
