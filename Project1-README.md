@@ -18,6 +18,15 @@
     - Prompts:
         - How to add elements in a doubly linked list
         - how does pointer behaviour change when pointer is passed to a function (passing a reference vs passing a reference to a reference)
+        - generate code for last section of the program
+            cprintf("Hello Xv6")
+            - location to implement the sys_hello function call
+            - i was following user programs and how they are connected to the kernel space, i initially searched for sys_fork and fork connections, later i realized they were done through the lookup table and mapping that we implemented for syscalls with usys.S file
+            - i did not know that there were two different print functions in kernel and user mode
+            - initially i used printf() from the userspace to print the message but due to errors I used github agent mode to fix my program
+
+    - All the other code than above are my own implementation.
+            
 
 
 ## Implementation Details
@@ -92,3 +101,10 @@ testing ls in the filesystem
 
 - Task4
 ![Sleep userprogs](assets/task4.png)
+
+### AI Used
+- Explain hello mapping to kernel space
+![problem1](assets/ai_prompt_1.png)
+
+- Cprintf vs printf in xv6 (usermode calls vs kernel mode calls)
+![problem1](assets/ai_prompt_2.png)
