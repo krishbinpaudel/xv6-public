@@ -1,5 +1,14 @@
 # Project 1 - README
 
+## Assignment Details (Rendered Markdown)
+https://github.com/krishbinpaudel/xv6-public/blob/master/Project1-README.md
+
+## Video of all the task
+https://drive.google.com/file/d/1wMFQPvdYD1A-u9o7b5eh5rOCv5Kc_9MY/view?usp=sharing
+
+## Github repo of my implementation
+https://github.com/krishbinpaudel/xv6-public/blob/master/Project1-README.md
+
 ## System Environment
 - **Operating System:** Linux (Kubuntu 24.04)
 - **Compiler:** gcc (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0
