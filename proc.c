@@ -115,6 +115,10 @@ found:
 
   p->ticks_running = 0;
   assign_job_length(p);
+#ifdef PRIORITYRR
+  p->priority = NPRIORITY - 1;
+  p->time_slice = TIME_QUANTUM;  // Initialize to time quantum
+#endif
 
   return p;
 }
@@ -354,7 +358,6 @@ scheduler(void)
     if(shortest_job != 0){
       p = shortest_job;
       
-      // Switch to chosen process
       c->proc = p;
       switchuvm(p);
       p->state = RUNNING;
@@ -362,8 +365,49 @@ scheduler(void)
       swtch(&(c->scheduler), p->context);
       switchkvm();
 
-      // Process is done running for now.
       c->proc = 0;
+    }
+    
+    release(&ptable.lock);
+  }
+}
+#elif defined(PRIORITYRR)
+// PRIORITYRR (Multi-level Priority with Round-Robin) Scheduler
+void scheduler(void)
+{
+  struct proc *p;
+  struct cpu *c = mycpu();
+  c->proc = 0;
+  
+  for(;;){
+    // Enable interrupts on this processor.
+    sti();
+
+    acquire(&ptable.lock);
+    
+    // Find the highest priority level with RUNNABLE processes
+    int highest_priority = NPRIORITY;
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      if(p->state == RUNNABLE && p->priority < highest_priority){
+        highest_priority = p->priority;
+      }
+    }
+    
+    // Run ALL processes at the highest priority level (round-robin), trap sets process to expire
+    if(highest_priority < NPRIORITY){
+      for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+        if(p->state != RUNNABLE || p->priority != highest_priority)
+          continue;
+
+        c->proc = p;
+        switchuvm(p);
+        p->state = RUNNING;
+
+        swtch(&(c->scheduler), p->context);
+        switchkvm();
+
+        c->proc = 0;
+      }
     }
     
     release(&ptable.lock);
@@ -637,6 +681,40 @@ get_sjf_job_length(int pid)
       // Check if process is in scheduling queue (RUNNABLE or RUNNING)
       if(p->state == RUNNABLE || p->state == RUNNING){
         result = p->predicted_job_length;
+      }
+      break;
+    }
+  }
+  release(&ptable.lock);
+  return result;
+}
+
+int
+set_sched_priority(int priority)
+{
+  struct proc *curproc = myproc();
+  
+  if(priority < 0 || priority >= NPRIORITY)
+    return -1;
+  
+  acquire(&ptable.lock);
+  curproc->priority = priority;
+  release(&ptable.lock);
+  
+  return 0;
+}
+
+int
+get_sched_priority(int pid)
+{
+  struct proc *p;
+  int result = -1;
+  
+  acquire(&ptable.lock);
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if(p->pid == pid){
+      if(p->state == RUNNABLE || p->state == RUNNING){
+        result = p->priority;
       }
       break;
     }

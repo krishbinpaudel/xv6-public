@@ -33,6 +33,11 @@ struct context {
 };
 
 enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
+#define NPRIORITY 3     // Number of priority levels (0 = highest, 2 = lowest)
+
+#ifdef PRIORITYRR
+#define TIME_QUANTUM 2  // Time quantum in ticks for RR scheduling
+#endif
 
 // Per-process state
 struct proc {
@@ -51,6 +56,8 @@ struct proc {
   char name[16];               // Process name (debugging)
   int ticks_running;           // Number of ticks process has been running
   uint predicted_job_length;   // Predicted job length for SJF scheduler
+  int priority;                // Priority level for PRIORITYRR scheduler (0 = highest)
+  int time_slice;              // Remaining time slice for RR scheduling
 };
 
 // Process memory is laid out contiguously, low addresses first:

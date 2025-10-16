@@ -87,6 +87,9 @@ CFLAGS += $(shell $(CC) -fno-stack-protector -E -x c /dev/null >/dev/null 2>&1 &
 ifeq ($(SCHEDULER),SJF)
 CFLAGS += -DSJF
 endif
+ifeq ($(SCHEDULER),PRIORITYRR)
+CFLAGS += -DPRIORITYRR
+endif
 
 ASFLAGS = -m32 -gdwarf-2 -Wa,-divide
 # FreeBSD ld wants ``elf_i386_fbsd''
@@ -196,6 +199,7 @@ UPROGS=\
 	_sort\
 	_test_ticks\
 	_sjftest\
+	_prioritytest\
 
 UFILES_MANUAL = \
 	OS611_example.txt\

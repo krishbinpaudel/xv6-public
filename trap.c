@@ -57,6 +57,10 @@ trap(struct trapframe *tf)
     // Increment ticks_running for the currently running process
     if(myproc() != 0 && myproc()->state == RUNNING){
       myproc()->ticks_running++;
+      // Decrement time slice for PRIORITYRR scheduler
+      #ifdef PRIORITYRR
+      myproc()->time_slice--;
+      #endif
     }
     lapiceoi();
     break;
@@ -109,7 +113,15 @@ trap(struct trapframe *tf)
   #ifdef SJF
   // For SJF, don't yield on timer (non-preemptive)
   // Process runs until it blocks or exits
-  
+  #elif defined(PRIORITYRR)
+  // For PRIORITYRR, yield when time slice expires OR when preempted by higher priority
+  if(myproc() && myproc()->state == RUNNING && tf->trapno == T_IRQ0+IRQ_TIMER){
+    // Always yield on timer to allow priority preemption
+    if(myproc()->time_slice <= 0){
+      myproc()->time_slice = TIME_QUANTUM;
+    }
+    yield();
+  }
   #else
   // For DEFAULT, yield on every timer tick (round-robin)
   if(myproc() && myproc()->state == RUNNING &&
