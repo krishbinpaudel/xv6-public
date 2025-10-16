@@ -2,229 +2,139 @@
 #include "stat.h"
 #include "user.h"
 
+#define MAXLEN 512
 
-#define REVERSE 1
-#define NUMERICAL 2
-#define RM_DUPLICATE 3
-
-struct list_content {
-  char name[DIRSIZ];
-  struct stat st;
-  struct list_content *next;
-  struct list_content *prev;
+struct line_node {
+  char line[MAXLEN];
+  struct line_node *next;
+  struct line_node *prev;
 };
 
-void store_in_list(struct list_content **head, struct list_content **tail,
-                   char *name, struct stat st, int sort) {
-  struct list_content *data = malloc(sizeof(struct list_content));
-  if (!data) {
-    printf(2, "ls: cannot allocate memory\n");
+int read_line(int fd, char *buf, int max) {
+  int i = 0, n;
+  char c;
+  while (i < max - 1) {
+    n = read(fd, &c, 1);
+    if (n < 1) break;
+    if (c == '\n') break;
+    buf[i++] = c;
+  }
+  buf[i] = 0;
+  return i;
+}
+
+int compare_lines(char *a, char *b, int numerical) {
+  if (numerical) {
+    int n1 = atoi(a);
+    int n2 = atoi(b);
+    if (n1 < n2) return -1;
+    if (n1 > n2) return 1;
+    return 0;
+  }
+  return strcmp(a, b);
+}
+
+void insert_sorted(struct line_node **head, char *line, int reverse, int numerical, int unique) {
+  struct line_node *new_node = malloc(sizeof(struct line_node));
+  if (!new_node) {
+    printf(2, "sort: cannot allocate memory\n");
     return;
   }
-  strcpy(data->name, name);
-  data->st = st;
+  strcpy(new_node->line, line);
+  new_node->next = 0;
+  new_node->prev = 0;
+
   if (*head == 0) {
-    data->next = 0;
-    data->prev = 0;
-    *head = data;
-    *tail = data;
+    *head = new_node;
     return;
   }
-  if (!sort) {
-    // insert at the end
-    (*tail)->next = data;
-    data->prev = *tail;
-    data->next = 0;
-    *tail = data;
-    return;
-  }
-  // sort by size (descending)
-  struct list_content *current = *head;
-  while (current) {
-    if (data->st.size > current->st.size) {
-      // insert before current
-      data->next = current;
-      data->prev = current->prev;
-      if (current->prev) {
-        current->prev->next = data;
-      } else {
-        *head = data;
+
+  if (unique) {
+    struct line_node *current = *head;
+    while (current) {
+      if (compare_lines(current->line, line, numerical) == 0) {
+        free(new_node);
+        return;
       }
-      current->prev = data;
+      current = current->next;
+    }
+  }
+
+  struct line_node *current = *head;
+
+  while (current) {
+    int cmp = compare_lines(new_node->line, current->line, numerical);
+    if (reverse) cmp = -cmp; // Reverse the comparison
+    
+    if (cmp < 0) {
+      // Insert before current
+      new_node->next = current;
+      new_node->prev = current->prev;
+      
+      if (current->prev) {
+        current->prev->next = new_node;
+      } else {
+        *head = new_node;
+      }
+      current->prev = new_node;
       return;
     }
+    
     if (current->next == 0) {
-      // insert at the end
-      current->next = data;
-      data->prev = current;
-      data->next = 0;
-      *tail = data;
+      // Insert at end
+      current->next = new_node;
+      new_node->prev = current;
+      new_node->next = 0;
       return;
     }
+    
     current = current->next;
   }
 }
 
-void deallocate_list(struct list_content *head) {
-  struct list_content *current = head;
-  struct list_content *next;
+void print_and_free(struct line_node *head) {
+  struct line_node *current = head;
+  struct line_node *next;
   while (current) {
+    printf(1, "%s\n", current->line);
     next = current->next;
     free(current);
     current = next;
   }
 }
 
-void print_list(struct list_content *head) {
-  struct list_content *current = head;
-  while (current) {
-    printf(1, "%s %d %d %d\n", current->name, current->st.type, current->st.ino,
-           current->st.size);
-    current = current->next;
-  }
-}
-
-
-int
-main(int argc, char *argv[])
-{
-  int i;
-
-  for(i = 1; i < argc; i++)
-    printf(1, "%s%s", argv[i], i+1 < argc ? " " : "\n");
-  exit();
-}
-char *fmtname(char *path) {
-  static char buf[DIRSIZ + 1];
-  char *p;
-
-  // Find first character after last slash.
-  for (p = path + strlen(path); p >= path && *p != '/'; p--)
-    ;
-  p++;
-
-  // Return blank-padded name.
-  if (strlen(p) >= DIRSIZ)
-    return p;
-  memmove(buf, p, strlen(p));
-  memset(buf + strlen(p), ' ', DIRSIZ - strlen(p));
-  return buf;
-}
-
-void ls(char *path, uint show_hidden, uint sort) {
-  char buf[512], *p;
-  struct list_content *head = 0;
-  struct list_content *tail = 0;
-  int fd;
-  struct dirent de;
-  struct stat st;
-
-  if ((fd = open(path, 0)) < 0) {
-    printf(2, "ls: cannot open %s\n", path);
-    return;
-  }
-
-  if (fstat(fd, &st) < 0) {
-    printf(2, "ls: cannot stat %s\n", path);
-    close(fd);
-    return;
-  }
-  char *fmted;
-  switch (st.type) {
-  case T_FILE:
-    // hide files starting with '.' unless show_hidden is set
-    fmted = fmtname(path);
-    if (!show_hidden && fmted[0] == '.')
-      break;
-    store_in_list(&head, &tail, fmted, st, sort);
-    // printf(1, "%s %d %d %d\n", fmted, st.type, st.ino, st.size);
-    break;
-
-  case T_DIR:
-    if (strlen(path) + 1 + DIRSIZ + 1 > sizeof buf) {
-      printf(1, "ls: path too long\n");
-      break;
-    }
-    strcpy(buf, path);
-    p = buf + strlen(buf);
-    *p++ = '/';
-    while (read(fd, &de, sizeof(de)) == sizeof(de)) {
-      if (de.inum == 0)
-        continue;
-      // hide files/folders starting with '.' unless show_hidden is set
-      if (!show_hidden && de.name[0] == '.')
-        continue;
-      memmove(p, de.name, DIRSIZ);
-      p[DIRSIZ] = 0;
-      if (stat(buf, &st) < 0) {
-        printf(1, "ls: cannot stat %s\n", buf);
-        continue;
-      }
-      // print '/' after directory names
-      fmted = fmtname(buf);
-      if (st.type == T_DIR) {
-        int j = 0;
-        for (; j < DIRSIZ; j++) {
-          if (fmted[j] == ' ') {
-            fmted[j] = '/';
-            break;
-          }
-        }
-      }
-      store_in_list(&head, &tail, fmted, st, sort);
-      // printf(1, "%s %d %d %d\n", fmted, st.type, st.ino, st.size);
-    }
-    break;
-  }
-  print_list(head);
-  deallocate_list(head);
-  close(fd);
-}
-
-// parsing options passed into the command line
-int check_options(char *argv[], int argc) {
-  int show_hidden = 0;
-  int sort = 0;
-  for (int i = 1; i < argc; i++) {
-    if (strcmp(argv[i], "-a") == 0) {
-      show_hidden = HIDDEN;
-    } else if (strcmp(argv[i], "-s") == 0) {
-      sort = SORT;
-    }
-  }
-  // we use bitwise OR to combine options
-  return show_hidden | sort;
-}
-
 int main(int argc, char *argv[]) {
-  int i;
+  int fd = 0;
+  int reverse = 0, numerical = 0, unique = 0;
+  int argi = 1;
+  char buf[MAXLEN];
+  struct line_node *head = 0;
 
-  printf(2, "ls: cannot allocate memory\n");
-
-  if (argc < 2) {
-    ls(".", 0, 0);
-    exit();
-  }
-  int options = check_options(argv, argc);
-  if (options) {
-    // number of options
-    int option_count = 0, buf = options;
-    for (; buf != 0; buf >>= 1) {
-      if (buf & 1)
-        option_count++;
-    };
-    int folder_count = argc - option_count - 1;
-    int offset = option_count + 1;
-    if (folder_count > 0) {
-      for (i = offset; i < argc; i++)
-        ls(argv[i], (options & HIDDEN) ? 1 : 0, (options & SORT) ? 1 : 0);
-      exit();
-    } else {
-      ls(".", (options & HIDDEN) ? 1 : 0, (options & SORT) ? 1 : 0);
+  for (; argi < argc; argi++) {
+    if (argv[argi][0] != '-') break;
+    if (strcmp(argv[argi], "-r") == 0) reverse = 1;
+    else if (strcmp(argv[argi], "-n") == 0) numerical = 1;
+    else if (strcmp(argv[argi], "-u") == 0) unique = 1;
+    else {
+      printf(2, "sort: unknown option %s\n", argv[argi]);
       exit();
     }
   }
-  for (i = 1; i < argc; i++)
-    ls(argv[i], 0, 0);
+
+  if (argi < argc) {
+    fd = open(argv[argi], 0);
+    if (fd < 0) {
+      printf(2, "sort: cannot open %s\n", argv[argi]);
+      exit();
+    }
+  }
+
+  while (read_line(fd, buf, MAXLEN) > 0) {
+    insert_sorted(&head, buf, reverse, numerical, unique);
+  }
+
+  if (fd > 0) close(fd);
+
+  print_and_free(head);
   exit();
 }
