@@ -50,6 +50,7 @@ struct proc {
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
   int ticks_running;           // Number of ticks process has been running
+  uint predicted_job_length;   // Predicted job length for SJF scheduler
 };
 
 // Process memory is laid out contiguously, low addresses first:

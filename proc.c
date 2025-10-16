@@ -19,6 +19,7 @@ extern void forkret(void);
 extern void trapret(void);
 
 static void wakeup1(void *chan);
+static void assign_job_length(struct proc *p);
 
 void
 pinit(void)
@@ -113,6 +114,7 @@ found:
   p->context->eip = (uint)forkret;
 
   p->ticks_running = 0;
+  assign_job_length(p);
 
   return p;
 }
@@ -321,6 +323,54 @@ wait(void)
 //  - swtch to start running that process
 //  - eventually that process transfers control
 //      via swtch back to the scheduler.
+
+#ifdef SJF
+// SJF (Shortest Job First) Scheduler
+void
+scheduler(void)
+{
+  struct proc *p;
+  struct proc *shortest_job;
+  struct cpu *c = mycpu();
+  c->proc = 0;
+  
+  for(;;){
+    // Enable interrupts on this processor.
+    sti();
+
+    // Loop over process table looking for process with shortest predicted job length
+    acquire(&ptable.lock);
+    
+    shortest_job = 0;
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      if(p->state != RUNNABLE)
+        continue;
+      
+      if(shortest_job == 0 || p->predicted_job_length < shortest_job->predicted_job_length){
+        shortest_job = p;
+      }
+    }
+    
+    if(shortest_job != 0){
+      p = shortest_job;
+      
+      // Switch to chosen process
+      c->proc = p;
+      switchuvm(p);
+      p->state = RUNNING;
+
+      swtch(&(c->scheduler), p->context);
+      switchkvm();
+
+      // Process is done running for now.
+      c->proc = 0;
+    }
+    
+    release(&ptable.lock);
+  }
+}
+#else
+// DEFAULT (Round-Robin) Scheduler
 void
 scheduler(void)
 {
@@ -356,6 +406,7 @@ scheduler(void)
 
   }
 }
+#endif
 
 // Enter scheduler.  Must hold only ptable.lock
 // and have changed proc->state. Saves and restores
@@ -554,4 +605,42 @@ get_ticks_running(int pid) {
   if(!found)
     return -1;
   return ticks;
+}
+
+// Simple pseudo-random number generator
+static uint randseed = 1;
+
+uint
+rand(void)
+{
+  randseed = randseed * 1664525 + 1013904223;
+  return randseed;
+}
+
+// Assign a random predicted job length
+void
+assign_job_length(struct proc *p)
+{
+  p->predicted_job_length = 1 + (rand() % 200);
+}
+
+// Get predicted job length for a process
+int
+get_sjf_job_length(int pid)
+{
+  struct proc *p;
+  int result = -1;
+  
+  acquire(&ptable.lock);
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if(p->pid == pid){
+      // Check if process is in scheduling queue (RUNNABLE or RUNNING)
+      if(p->state == RUNNABLE || p->state == RUNNING){
+        result = p->predicted_job_length;
+      }
+      break;
+    }
+  }
+  release(&ptable.lock);
+  return result;
 }
