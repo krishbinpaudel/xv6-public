@@ -22,16 +22,15 @@ main(int argc, char *argv[])
       
       volatile int dummy = 0;
       int j;
-      for(j = 0; j < 5000000; j++){
+      for(j = 0; j < 50000000; j++){
         dummy = dummy + j;
       }
-      
-      printf(1, "Child %d: done (ticks=%d)\n", i, ticks_running(my_pid));
+
+      printf(1, "Child %d: done (ticks=%d) Uptime: %d\n", i, ticks_running(my_pid), uptime());
       exit();
     }
   }
   
-  // Wait for all children
   for(i = 0; i < 3; i++){
     wait();
   }
