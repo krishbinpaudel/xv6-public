@@ -184,6 +184,7 @@ UPROGS=\
 	_hello_world\
 	_sleep\
 	_sort\
+	_test_ticks\
 
 UFILES_MANUAL = \
 	OS611_example.txt\

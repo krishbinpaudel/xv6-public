@@ -54,6 +54,10 @@ trap(struct trapframe *tf)
       wakeup(&ticks);
       release(&tickslock);
     }
+    // Increment ticks_running for the currently running process
+    if(myproc() != 0 && myproc()->state == RUNNING){
+      myproc()->ticks_running++;
+    }
     lapiceoi();
     break;
   case T_IRQ0 + IRQ_IDE:

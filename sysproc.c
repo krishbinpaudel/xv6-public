@@ -96,3 +96,14 @@ sys_hello(void)
   cprintf("Hello Xv6!\n");
   return 0;
 }
+
+int
+sys_ticks_running(void)
+{
+  int pid;
+  
+  if(argint(0, &pid) < 0)
+    return -1;
+  
+  return get_ticks_running(pid);
+}

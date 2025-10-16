@@ -112,6 +112,8 @@ found:
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
 
+  p->ticks_running = 0;
+
   return p;
 }
 
@@ -531,4 +533,25 @@ procdump(void)
     }
     cprintf("\n");
   }
+}
+
+uint
+get_ticks_running(int pid) {
+  struct proc *p;
+  int found = 0;
+  uint ticks = 0;
+
+  acquire(&ptable.lock);
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if(p->pid == pid && p->state != UNUSED){
+      ticks = p->ticks_running;
+      found = 1;
+      break;
+    }
+  }
+  release(&ptable.lock);
+  
+  if(!found)
+    return -1;
+  return ticks;
 }
