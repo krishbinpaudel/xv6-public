@@ -1,5 +1,3 @@
-// Simple grep with substring matching and flags: -i, -n, -v
-
 #include "types.h"
 #include "stat.h"
 #include "user.h"
