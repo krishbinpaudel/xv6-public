@@ -630,25 +630,28 @@ procdump(void)
   }
 }
 
-uint
+int
 get_ticks_running(int pid) {
   struct proc *p;
-  int found = 0;
-  uint ticks = 0;
 
   acquire(&ptable.lock);
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-    if(p->pid == pid && p->state != UNUSED){
-      ticks = p->ticks_running;
-      found = 1;
-      break;
+    if(p->pid == pid){
+      // Return -1 only for UNUSED (process doesn't exist)
+      if(p->state == UNUSED){
+        release(&ptable.lock);
+        return -1;
+      }
+      // Return actual ticks_running (could be 0 for unscheduled process)
+      int ticks = p->ticks_running;
+      release(&ptable.lock);
+      return ticks;
     }
   }
   release(&ptable.lock);
   
-  if(!found)
-    return -1;
-  return ticks;
+  // PID not found at all
+  return -1;
 }
 
 // Simple pseudo-random number generator
