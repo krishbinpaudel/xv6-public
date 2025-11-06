@@ -47,12 +47,19 @@ sys_sbrk(void)
 {
   int addr;
   int n;
+  struct proc *curproc = myproc();
 
   if(argint(0, &n) < 0)
     return -1;
-  addr = myproc()->sz;
-  if(growproc(n) < 0)
-    return -1;
+  // addr = myproc()->sz;
+  // if(growproc(n) < 0)
+  //   return -1;
+  addr = curproc->sz;
+  
+  // lazy allocation - just increment size, don't allocate pages yet
+  // Pages will be allocated on demand when page fault occurs
+  curproc->sz += n;
+  
   return addr;
 }
 

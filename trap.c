@@ -8,6 +8,10 @@
 #include "traps.h"
 #include "spinlock.h"
 
+// Debug flag for page fault messages is controlled by Makefile
+// Compile with: make DEBUG=1 to enable debug output
+// Compile with: make DEBUG=0 (or just make) to disable debug output
+
 // Interrupt descriptor table (shared by all CPUs).
 struct gatedesc idt[256];
 extern uint vectors[];  // in vectors.S: array of 256 entry pointers
@@ -85,6 +89,122 @@ trap(struct trapframe *tf)
             cpuid(), tf->cs, tf->eip);
     lapiceoi();
     break;
+
+  case T_PGFLT:
+  {
+      // Lazy page allocation: allocate page on first access
+      uint faulting_address = rcr2();
+      struct proc *curproc = myproc();
+      char *mem;
+      uint page_addr;
+      
+      // Round to page boundary
+      page_addr = PGROUNDDOWN(faulting_address);
+      
+      #if DEBUG_PAGEFAULT
+      cprintf("[PID %d] Page fault at address 0x%x (page 0x%x)\n", 
+              curproc->pid, faulting_address, page_addr);
+      #endif
+      
+      // Validate the faulting address:
+      // 1. Must be below process size (within allocated region)
+      // 2. Must be above first page (guard page for null pointer protection)
+      if(faulting_address >= PGSIZE && faulting_address < curproc->sz){
+          #ifdef LOCALITY
+          // Locality-aware allocation: allocate 3 pages at once
+          // (faulting page + 2 subsequent pages)
+          #if DEBUG_PAGEFAULT
+          cprintf("[PID %d] LOCALITY-AWARE: Attempting to allocate 3 pages starting at 0x%x\n",
+                  curproc->pid, page_addr);
+          #endif
+          int pages_allocated = 0;
+          int i;
+          
+          for(i = 0; i < 3; i++){
+              uint current_page = page_addr + (i * PGSIZE);
+              pte_t *pte;
+              
+              // Check if page is within process size
+              if(current_page >= curproc->sz)
+                  break;
+              
+              // Check if page is already allocated
+              pte = walkpgdir(curproc->pgdir, (void*)current_page, 0);
+              if(pte != 0 && (*pte & PTE_P))
+                  continue; // Page already allocated, skip it
+              
+              // Allocate physical page
+              mem = kalloc();
+              if(mem == 0){
+                  if(pages_allocated == 0){
+                      // Failed to allocate even the faulting page
+                      cprintf("locality_alloc: out of memory\n");
+                      curproc->killed = 1;
+                  }
+                  // Partial allocation is acceptable for locality-aware
+                  break;
+              }
+              
+              // Zero the page for security
+              memset(mem, 0, PGSIZE);
+              
+              // Map the page with user and write permissions
+              if(mappages(curproc->pgdir, (char*)current_page, PGSIZE, V2P(mem), PTE_W|PTE_U) < 0){
+                  kfree(mem);
+                  if(pages_allocated == 0){
+                      // Failed to map even the faulting page
+                      cprintf("locality_alloc: mappages failed\n");
+                      curproc->killed = 1;
+                  }
+                  // Partial allocation is acceptable
+                  break;
+              }
+              #if DEBUG_PAGEFAULT
+              cprintf("[PID %d] LOCALITY-AWARE: Allocated page %d/3 at 0x%x\n",
+                      curproc->pid, i+1, current_page);
+              #endif
+              pages_allocated++;
+          }
+          #if DEBUG_PAGEFAULT
+          cprintf("[PID %d] LOCALITY-AWARE: Total pages allocated = %d\n",
+                  curproc->pid, pages_allocated);
+          #endif
+          #else
+          // Pure lazy allocation: allocate only the faulting page
+          #if DEBUG_PAGEFAULT
+          cprintf("[PID %d] LAZY: Allocating single page at 0x%x\n",
+                  curproc->pid, page_addr);
+          #endif
+          mem = kalloc();
+          if(mem == 0){
+              cprintf("lazy_alloc: out of memory\n");
+              curproc->killed = 1;
+              break;
+          }
+          // Zero the page for security (prevent data leaks)
+          memset(mem, 0, PGSIZE);
+          
+          // Map the page with user and write permissions
+          if(mappages(curproc->pgdir, (char*)page_addr, PGSIZE, V2P(mem), PTE_W|PTE_U) < 0){
+              cprintf("lazy_alloc: mappages failed\n");
+              kfree(mem);
+              curproc->killed = 1;
+              break;
+          }
+          #if DEBUG_PAGEFAULT
+          cprintf("[PID %d] LAZY: Successfully allocated page at 0x%x\n",
+                  curproc->pid, page_addr);
+          #endif
+          #endif
+      } else {
+          #if DEBUG_PAGEFAULT
+          cprintf("[PID %d] SEGFAULT: Invalid address 0x%x (process size: 0x%x)\n",
+                  curproc->pid, faulting_address, curproc->sz);
+          #endif
+          curproc->killed = 1;
+      }
+  }
+  break;
 
   //PAGEBREAK: 13
   default:
