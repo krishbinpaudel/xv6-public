@@ -26,6 +26,7 @@ int uptime(void);
 int hello(void);
 int ticks_running(int);
 int sjf_job_length(int);
+int lseek(int, int);
 int set_sched_priority(int);
 int get_sched_priority(int);
 

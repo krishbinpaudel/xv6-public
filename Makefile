@@ -228,6 +228,7 @@ UPROGS=\
 	_page_allocation_test\
 	_prioritytest\
 	_page_fault_test\
+	_lseekdemo\
 
 UFILES_MANUAL = \
 	OS611_example.txt\

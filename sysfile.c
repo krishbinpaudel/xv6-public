@@ -91,6 +91,26 @@ sys_write(void)
 }
 
 int
+sys_lseek(void)
+{
+  struct file *f;
+  int fd;
+  int offset;
+
+  if(argfd(0, &fd, &f) < 0 || argint(1, &offset) < 0)
+    return -1;
+  
+  if(f->type != FD_INODE)
+    return -1;
+
+  if((int)f->off + offset < 0)
+    return -1;
+
+  f->off += offset;
+  return f->off;
+}
+
+int
 sys_close(void)
 {
   int fd;
