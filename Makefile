@@ -230,6 +230,7 @@ UPROGS=\
 	_page_fault_test\
 	_lseekdemo\
 	_testsymlink\
+	_testhugefiles\
 
 UFILES_MANUAL = \
 	OS611_example.txt\
