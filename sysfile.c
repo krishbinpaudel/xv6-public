@@ -327,6 +327,31 @@ sys_open(void)
       return -1;
     }
     ilock(ip);
+
+    if(ip->type == T_SYMLINK && !(omode & O_NOFOLLOW)){
+      int depth = 0;
+      while(ip->type == T_SYMLINK){
+        if(depth >= 10){
+          iunlockput(ip);
+          end_op();
+          return -1;
+        }
+        char linkpath[DIRSIZ*4];
+        memset(linkpath, 0, sizeof(linkpath));
+        if(readi(ip, linkpath, 0, sizeof(linkpath)-1) < 0){
+          iunlockput(ip);
+          end_op();
+          return -1;
+        }
+        iunlockput(ip);
+        if((ip = namei(linkpath)) == 0){
+          end_op();
+          return -1;
+        }
+        ilock(ip);
+        depth++;
+      }
+    }
     if(ip->type == T_DIR && omode != O_RDONLY){
       iunlockput(ip);
       end_op();
@@ -460,5 +485,28 @@ sys_pipe(void)
   }
   fd[0] = fd0;
   fd[1] = fd1;
+  return 0;
+}
+
+int
+sys_symlink(void)
+{
+  char *target, *linkpath;
+  struct inode *ip;
+  if(argstr(0, &target) < 0 || argstr(1, &linkpath) < 0)
+    return -1;
+  begin_op();
+  if((ip = create(linkpath, T_SYMLINK, 0, 0)) == 0){
+    end_op();
+    return -1;
+  }
+
+  if(writei(ip, target, 0, strlen(target)) != strlen(target)){
+    iunlockput(ip);
+    end_op();
+    return -1;
+  }
+  iunlockput(ip);
+  end_op();
   return 0;
 }

@@ -29,6 +29,7 @@ int sjf_job_length(int);
 int lseek(int, int);
 int set_sched_priority(int);
 int get_sched_priority(int);
+int symlink(const char*, const char*);
 
 // ulib.c
 int stat(const char*, struct stat*);

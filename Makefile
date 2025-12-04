@@ -229,6 +229,7 @@ UPROGS=\
 	_prioritytest\
 	_page_fault_test\
 	_lseekdemo\
+	_testsymlink\
 
 UFILES_MANUAL = \
 	OS611_example.txt\
